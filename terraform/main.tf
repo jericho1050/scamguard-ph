@@ -104,3 +104,68 @@ resource "aws_amplify_branch" "main" {
   branch_name = "main"
   stage       = "PRODUCTION"
 }
+
+# WAF Web ACL for DDoS + rate limiting at the edge
+resource "aws_wafv2_web_acl" "scamguard" {
+  name  = "scamguard-ph-waf"
+  scope = "CLOUDFRONT"
+
+  # WAF for CloudFront must be in us-east-1
+  provider = aws
+
+  default_action {
+    allow {}
+  }
+
+  # Rate limit: 100 requests per 5 minutes per IP
+  rule {
+    name     = "rate-limit"
+    priority = 1
+
+    action {
+      block {}
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = 100
+        aggregate_key_type = "IP"
+      }
+    }
+
+    visibility_config {
+      sampled_requests_enabled   = true
+      cloudwatch_metrics_enabled = true
+      metric_name                = "scamguard-rate-limit"
+    }
+  }
+
+  # Block known bad bots
+  rule {
+    name     = "aws-managed-common"
+    priority = 2
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      sampled_requests_enabled   = true
+      cloudwatch_metrics_enabled = true
+      metric_name                = "scamguard-common-rules"
+    }
+  }
+
+  visibility_config {
+    sampled_requests_enabled   = true
+    cloudwatch_metrics_enabled = true
+    metric_name                = "scamguard-waf"
+  }
+}
