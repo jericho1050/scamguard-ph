@@ -92,7 +92,7 @@ resource "aws_amplify_app" "scamguard" {
   EOT
 
   environment_variables = {
-    AWS_REGION = var.aws_region
+    BEDROCK_REGION = var.aws_region
   }
 
   platform = "WEB_COMPUTE"

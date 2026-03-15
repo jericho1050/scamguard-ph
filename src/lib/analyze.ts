@@ -33,14 +33,13 @@ const AI_EDUCATION_CARDS: Record<string, string> = {
 
 export async function analyzeMessage(message: string): Promise<AnalysisResult> {
   // If no AWS config, use demo responses
-  if (!process.env.AWS_REGION && !process.env.AWS_DEFAULT_REGION) {
+  const region = process.env.BEDROCK_REGION || process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION
+  if (!region) {
     return getDemoResponse(message)
   }
 
   try {
-    const client = new BedrockRuntimeClient({
-      region: process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1',
-    })
+    const client = new BedrockRuntimeClient({ region })
 
     const payload = {
       anthropic_version: 'bedrock-2023-05-31',
