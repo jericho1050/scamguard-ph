@@ -1,0 +1,106 @@
+terraform {
+  required_version = ">= 1.5.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.aws_region
+}
+
+data "aws_caller_identity" "current" {}
+
+# IAM Role for Amplify
+resource "aws_iam_role" "amplify_role" {
+  name = "scamguard-ph-amplify-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "amplify.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+# Amplify needs basic permissions to build
+resource "aws_iam_role_policy_attachment" "amplify_basic" {
+  role       = aws_iam_role.amplify_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess-Amplify"
+}
+
+# Bedrock access policy for the SSR compute functions
+resource "aws_iam_role_policy" "bedrock_access" {
+  name = "bedrock-access"
+  role = aws_iam_role.amplify_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream"
+        ]
+        Resource = [
+          "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-opus-4-6-v1",
+          "arn:aws:bedrock:us-east-1:${data.aws_caller_identity.current.account_id}:inference-profile/us.anthropic.claude-opus-4-6-v1"
+        ]
+      }
+    ]
+  })
+}
+
+# Amplify App (connected to GitHub)
+resource "aws_amplify_app" "scamguard" {
+  name                 = "scamguard-ph"
+  repository           = var.github_repository
+  iam_service_role_arn = aws_iam_role.amplify_role.arn
+  access_token         = var.github_token
+
+  build_spec = <<-EOT
+    version: 1
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - curl -fsSL https://bun.sh/install | bash
+            - export PATH=$HOME/.bun/bin:$PATH
+            - bun install
+        build:
+          commands:
+            - export PATH=$HOME/.bun/bin:$PATH
+            - bun run build
+      artifacts:
+        baseDirectory: .next
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+          - .next/cache/**/*
+  EOT
+
+  environment_variables = {
+    AWS_REGION = var.aws_region
+  }
+
+  platform = "WEB_COMPUTE"
+}
+
+# Main branch
+resource "aws_amplify_branch" "main" {
+  app_id      = aws_amplify_app.scamguard.id
+  branch_name = "main"
+  stage       = "PRODUCTION"
+}
