@@ -80,3 +80,17 @@ export function getDemoResponse(message: string): AnalysisResult {
   }
   return safeResponse
 }
+
+export function getDemoImageResponse(): AnalysisResult {
+  return {
+    verdict: 'scam',
+    confidence: 91,
+    category: 'phishing',
+    explanation: 'Na-detect ng AI ang text sa screenshot mo. Mukhang phishing scam ito — may pekeng link at hinihingi ang personal info mo. Huwag i-click ang kahit anong link sa message na ito.',
+    redFlags: ['extracted text from image', 'suspicious URL detected', 'requests personal information'],
+    educationCard: {
+      title: 'Computer Vision + NLP',
+      content: 'Ginamit ng AI ang Computer Vision para basahin ang text sa screenshot mo, tapos NLP para i-analyze kung scam. Kaya kahit screenshot lang ang ipasa mo, kaya pa rin ng AI na suriin!',
+    },
+  }
+}

@@ -1,6 +1,6 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
 import type { AnalysisResult } from './types'
-import { getDemoResponse } from './demo-responses'
+import { getDemoResponse, getDemoImageResponse } from './demo-responses'
 
 const SYSTEM_PROMPT = `You are ScamGuard PH, an AI scam detection assistant for Filipino communities. Analyze the given message and determine if it is a scam.
 
@@ -31,15 +31,43 @@ const AI_EDUCATION_CARDS: Record<string, string> = {
   'Sentiment Analysis': 'Ginamit ng AI ang Sentiment Analysis para ma-detect ang emotional manipulation. Nakikita niya kung ang message ay gumagamit ng takot, urgency, o excitement para ma-pressure ka — classic scammer technique!',
 }
 
-export async function analyzeMessage(message: string): Promise<AnalysisResult> {
+export async function analyzeMessage(message: string, imageBase64?: string): Promise<AnalysisResult> {
   // If no AWS config, use demo responses
   const region = process.env.BEDROCK_REGION || process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION
   if (!region) {
-    return getDemoResponse(message)
+    return imageBase64 ? getDemoImageResponse() : getDemoResponse(message)
   }
 
   try {
     const client = new BedrockRuntimeClient({ region })
+
+    // Build content array for multimodal support
+    let content: unknown
+    if (imageBase64) {
+      // Extract base64 data and media type from data URL
+      const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/)
+      const mediaType = matches?.[1] || 'image/png'
+      const base64Data = matches?.[2] || imageBase64
+
+      content = [
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: mediaType,
+            data: base64Data,
+          },
+        },
+        {
+          type: 'text',
+          text: message
+            ? `Analyze this screenshot of a message for scams. Extract the text from the image first, then analyze it.\n\nAdditional context from user: "${message}"`
+            : 'Analyze this screenshot of a message for scams. Extract the text from the image first, then analyze it.',
+        },
+      ]
+    } else {
+      content = `Analyze this message for scams:\n\n"${message}"`
+    }
 
     const payload = {
       anthropic_version: 'bedrock-2023-05-31',
@@ -49,7 +77,7 @@ export async function analyzeMessage(message: string): Promise<AnalysisResult> {
       messages: [
         {
           role: 'user',
-          content: `Analyze this message for scams:\n\n"${message}"`,
+          content,
         },
       ],
     }
@@ -83,6 +111,6 @@ export async function analyzeMessage(message: string): Promise<AnalysisResult> {
     const err = error as Error & { name?: string; $metadata?: Record<string, unknown> }
     console.error('Bedrock analysis failed:', err.name, err.message)
     if (err.$metadata) console.error('Metadata:', JSON.stringify(err.$metadata))
-    return getDemoResponse(message)
+    return imageBase64 ? getDemoImageResponse() : getDemoResponse(message)
   }
 }

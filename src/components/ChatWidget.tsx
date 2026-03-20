@@ -11,6 +11,7 @@ interface Message {
   id: string
   type: 'user' | 'bot'
   text?: string
+  image?: string
   result?: AnalysisResult
   isLoading?: boolean
 }
@@ -57,38 +58,68 @@ export function ChatWidget() {
     {
       id: 'welcome',
       type: 'bot',
-      text: 'Kumusta! Ako si ScamGuard. I-paste mo ang kahina-hinalang message na natanggap mo at i-check ko kung scam ito.',
+      text: 'Kumusta! Ako si ScamGuard. I-paste mo ang kahina-hinalang message na natanggap mo, o mag-upload ng screenshot, at i-check ko kung scam ito.',
     },
   ])
   const [input, setInput] = useState('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Check file size (4MB limit)
+    if (file.size > 4 * 1024 * 1024) {
+      alert('Sobrang laki ng image. Max 4MB lang.')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const base64 = reader.result as string
+      setSelectedImage(base64)
+    }
+    reader.readAsDataURL(file)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const trimmed = input.trim()
-    if (!trimmed || isAnalyzing) return
+    if ((!trimmed && !selectedImage) || isAnalyzing) return
 
     const userMsgId = Date.now().toString()
     const botMsgId = (Date.now() + 1).toString()
 
     setMessages((prev) => [
       ...prev,
-      { id: userMsgId, type: 'user', text: trimmed },
+      {
+        id: userMsgId,
+        type: 'user',
+        text: trimmed || undefined,
+        image: selectedImage || undefined
+      },
       { id: botMsgId, type: 'bot', isLoading: true },
     ])
     setInput('')
+    const imageToSend = selectedImage
+    setSelectedImage(null)
     setIsAnalyzing(true)
 
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({
+          message: trimmed || undefined,
+          image: imageToSend || undefined
+        }),
       })
 
       if (!res.ok) throw new Error('API error')
@@ -133,7 +164,14 @@ export function ChatWidget() {
           msg.type === 'user' ? (
             <div key={msg.id} className="flex justify-end mb-3">
               <div className="bg-blue-600 text-white rounded-2xl rounded-br-md px-4 py-2.5 max-w-[85%] text-sm">
-                {msg.text}
+                {msg.image && (
+                  <img
+                    src={msg.image}
+                    alt="Uploaded screenshot"
+                    className="max-h-[200px] rounded-lg mb-2"
+                  />
+                )}
+                {msg.text && <div>{msg.text}</div>}
               </div>
             </div>
           ) : (
@@ -145,7 +183,52 @@ export function ChatWidget() {
 
       {/* Input */}
       <form onSubmit={handleSubmit} className="border-t border-gray-100 p-3 bg-gray-50/50 shrink-0">
-        <div className="flex gap-2">
+        {selectedImage && (
+          <div className="mb-2 relative inline-block">
+            <img
+              src={selectedImage}
+              alt="Selected preview"
+              className="max-h-[100px] rounded-lg border border-gray-200"
+            />
+            <button
+              type="button"
+              onClick={() => setSelectedImage(null)}
+              className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center"
+            >
+              ×
+            </button>
+          </div>
+        )}
+        <div className="flex gap-2 items-end">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageSelect}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isAnalyzing}
+            className="w-9 h-9 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center shrink-0"
+            title="Upload screenshot"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-5 h-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+          </button>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -155,7 +238,7 @@ export function ChatWidget() {
                 handleSubmit(e)
               }
             }}
-            placeholder="I-paste ang suspicious message dito..."
+            placeholder="I-paste ang suspicious message o mag-upload ng screenshot..."
             className="flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
             rows={2}
             maxLength={2000}
@@ -163,8 +246,8 @@ export function ChatWidget() {
           />
           <button
             type="submit"
-            disabled={isAnalyzing || !input.trim()}
-            className="bg-blue-600 text-white px-4 rounded-xl font-semibold text-sm hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors self-end"
+            disabled={isAnalyzing || (!input.trim() && !selectedImage)}
+            className="bg-blue-600 text-white px-4 rounded-xl font-semibold text-sm hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors self-end h-9"
           >
             Check
           </button>

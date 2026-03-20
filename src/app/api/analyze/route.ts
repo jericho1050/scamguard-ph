@@ -54,30 +54,52 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
 
-    if (!body.message || typeof body.message !== 'string') {
+    // Accept either message or image (or both)
+    if (!body.message && !body.image) {
       return NextResponse.json(
-        { error: 'Walang message. Paste mo ang suspicious message.' },
+        { error: 'Walang message o image. Paste mo ang suspicious message o mag-upload ng screenshot.' },
         { status: 400 }
       )
     }
 
-    const message = sanitize(body.message)
-
-    if (message.length === 0) {
-      return NextResponse.json(
-        { error: 'Walang ma-analyze. Paste mo ang suspicious message.' },
-        { status: 400 }
-      )
+    // Validate message if provided
+    let message = ''
+    if (body.message) {
+      if (typeof body.message !== 'string') {
+        return NextResponse.json(
+          { error: 'Invalid message format.' },
+          { status: 400 }
+        )
+      }
+      message = sanitize(body.message)
+      if (message.length > 2000) {
+        return NextResponse.json(
+          { error: 'Masyadong mahaba. Max 2000 characters lang.' },
+          { status: 400 }
+        )
+      }
     }
 
-    if (message.length > 2000) {
-      return NextResponse.json(
-        { error: 'Masyadong mahaba. Max 2000 characters lang.' },
-        { status: 400 }
-      )
+    // Validate image if provided
+    let imageBase64: string | undefined
+    if (body.image) {
+      if (typeof body.image !== 'string') {
+        return NextResponse.json(
+          { error: 'Invalid image format.' },
+          { status: 400 }
+        )
+      }
+      // Check size: 4MB base64 is roughly 5.6M characters
+      if (body.image.length > 5_600_000) {
+        return NextResponse.json(
+          { error: 'Sobrang laki ng image. Max 4MB lang.' },
+          { status: 400 }
+        )
+      }
+      imageBase64 = body.image
     }
 
-    const result = await analyzeMessage(message)
+    const result = await analyzeMessage(message, imageBase64)
     return NextResponse.json(result)
   } catch (error) {
     console.error('Analysis error:', error)
