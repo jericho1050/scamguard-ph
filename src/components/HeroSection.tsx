@@ -22,6 +22,9 @@ export function HeroSection() {
         >
           I-check ang Suspicious Message
         </a>
+        <p className="text-xs text-blue-200 mt-4">
+          Tip: I-add sa Home Screen mo para instant access at share-to-check!
+        </p>
       </div>
     </section>
   )

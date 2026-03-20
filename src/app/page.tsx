@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { HeroSection } from "@/components/HeroSection";
 import { ChatWidget } from "@/components/ChatWidget";
 import { HowItWorks } from "@/components/HowItWorks";
@@ -11,7 +12,9 @@ export default function Home() {
       <HeroSection />
 
       <section className="px-4 py-12 max-w-lg mx-auto" id="chat">
-        <ChatWidget />
+        <Suspense fallback={<div className="h-[700px]" />}>
+          <ChatWidget />
+        </Suspense>
       </section>
 
       <HowItWorks />

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import type { AnalysisResult } from '@/lib/types'
 import { VerdictCard } from './VerdictCard'
 import { EducationCard } from './EducationCard'
@@ -66,6 +67,7 @@ export function ChatWidget() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -89,10 +91,9 @@ export function ChatWidget() {
     reader.readAsDataURL(file)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const trimmed = input.trim()
-    if ((!trimmed && !selectedImage) || isAnalyzing) return
+  const submitMessage = async (messageText: string, imageData: string | null = null) => {
+    const trimmed = messageText.trim()
+    if ((!trimmed && !imageData) || isAnalyzing) return
 
     const userMsgId = Date.now().toString()
     const botMsgId = (Date.now() + 1).toString()
@@ -103,12 +104,11 @@ export function ChatWidget() {
         id: userMsgId,
         type: 'user',
         text: trimmed || undefined,
-        image: selectedImage || undefined
+        image: imageData || undefined
       },
       { id: botMsgId, type: 'bot', isLoading: true },
     ])
     setInput('')
-    const imageToSend = selectedImage
     setSelectedImage(null)
     setIsAnalyzing(true)
 
@@ -118,7 +118,7 @@ export function ChatWidget() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: trimmed || undefined,
-          image: imageToSend || undefined
+          image: imageData || undefined
         }),
       })
 
@@ -140,6 +140,24 @@ export function ChatWidget() {
       setIsAnalyzing(false)
     }
   }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await submitMessage(input, selectedImage)
+  }
+
+  // Auto-check from URL parameter (Web Share Target)
+  useEffect(() => {
+    const checkMessage = searchParams.get('check')
+    if (checkMessage && !isAnalyzing) {
+      submitMessage(checkMessage)
+      // Clean URL
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, '', '/')
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="flex flex-col h-[700px] max-h-[85vh] bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden">
