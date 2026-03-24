@@ -70,7 +70,11 @@ export function ChatWidget() {
   const searchParams = useSearchParams()
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    // Gentle scroll - only scroll enough to show new content, not jump to bottom
+    const container = messagesEndRef.current?.parentElement
+    if (container) {
+      container.scrollTop = container.scrollHeight - container.clientHeight
+    }
   }, [messages])
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -160,7 +164,7 @@ export function ChatWidget() {
   }, [])
 
   return (
-    <div className="flex flex-col h-[700px] max-h-[85vh] bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden">
+    <div className="flex flex-col h-[900px] max-h-[95vh] bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3.5 flex items-center gap-3 shrink-0">
         <div className="w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-sm font-bold">
